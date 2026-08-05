@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<h1>Settings</h1>
+<p class="muted">Add or remove stock symbols. This will create/drop stock tables in DuckDB.</p>
+
+<h2>Add Stock</h2>
+<form method="post" action="{{ url_for('settings') }}">
+  <input type="hidden" name="action" value="add" />
+  <div class="row">
+    <div class="field">
+      <label for="symbol">Stock Symbol</label>
+      <input id="symbol" name="symbol" type="text" placeholder="e.g. RELIANCE" required />
+    </div>
+    <div class="field">
+      <label for="exchange">Exchange</label>
+      <select id="exchange" name="exchange" required>
+        <option value="NSE">NSE</option>
+        <option value="BSE">BSE</option>
+      </select>
+    </div>
+    <div class="field">
+      <button class="btn btn-primary" type="submit">Add Stock</button>
+    </div>
+  </div>
+</form>
+
+<h2>Existing Stocks</h2>
+{% if stocks %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Symbol</th>
+      <th>Exchange</th>
+      <th>Table</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stock in stocks %}
+      <tr>
+        <td>{{ stock.id }}</td>
+        <td>{{ stock.symbol }}</td>
+        <td>{{ stock.exchange }}</td>
+        <td>{{ stock.table_name }}</td>
+        <td>
+          <form method="post" action="{{ url_for('settings') }}" onsubmit="return confirm('Delete {{ stock.symbol }} ({{ stock.exchange }})?');">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="stock_id" value="{{ stock.id }}" />
+            <button class="btn btn-danger" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No stocks yet.</p>
+{% endif %}
+{% endblock %}

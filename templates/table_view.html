@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Table View{% endblock %}
+
+{% block content %}
+<h1>Table: {{ table_name }}</h1>
+<p><a href="{{ url_for('list_tables') }}">← Back to table list</a></p>
+
+{% if headers and records %}
+<div style="overflow-x:auto;">
+  <table>
+    <thead>
+      <tr>
+        {% for h in headers %}
+          <th>{{ h }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in records %}
+        <tr>
+          {% for col in row %}
+            <td>{{ col }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>No rows in this table.</p>
+{% endif %}
+{% endblock %}

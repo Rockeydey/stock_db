@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}DuckDB Tables{% endblock %}
+
+{% block content %}
+<h1>DuckDB Tables</h1>
+<p class="muted">Browse all tables available in the database.</p>
+
+{% if tables %}
+<table>
+  <thead>
+    <tr>
+      <th>Table Name</th>
+      <th>Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for table in tables %}
+      <tr>
+        <td>{{ table }}</td>
+        <td><a class="btn btn-secondary" href="{{ url_for('view_table', table_name=table) }}">View</a></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No tables found.</p>
+{% endif %}
+{% endblock %}
