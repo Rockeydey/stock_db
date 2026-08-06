@@ -68,19 +68,34 @@ def _fetch_from_yahoo(ticker: str, api_start: str, api_end: str) -> tuple[pd.Dat
     return pd.DataFrame(), msg
 
 
+def _resolve_stock_name(ticker: str, symbol: str) -> str:
+    try:
+        info = yf.Ticker(ticker).info
+        if isinstance(info, dict):
+            name = info.get("longName") or info.get("shortName")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+    except Exception:
+        pass
+
+    # Fallback keeps a useful value even when metadata lookup fails.
+    return symbol
+
+
 def fetch_and_store_stock_data(
     conn: duckdb.DuckDBPyConnection,
     stock_id: int,
     symbol: str,
     exchange: str,
-    table_name: str,
     from_date: str,
     to_date: str,
+    overwrite_existing: bool = False,
 ) -> tuple[str, int, str]:
-    if log_exists(conn, stock_id, from_date, to_date):
+    if not overwrite_existing and log_exists(conn, stock_id, from_date, to_date):
         return "SKIPPED", 0, "Already refreshed for this date range."
 
     ticker = exchange_symbol(exchange, symbol)
+    stock_name = _resolve_stock_name(ticker, symbol)
     from_dt = datetime.strptime(from_date, "%Y-%m-%d").date()
     to_dt = datetime.strptime(to_date, "%Y-%m-%d").date()
 
@@ -124,6 +139,10 @@ def fetch_and_store_stock_data(
         trade_date = row["Date"]
         insert_rows.append(
             (
+                stock_id,
+                stock_name,
+                exchange,
+                symbol,
                 trade_date,
                 None if pd.isna(row.get("Open")) else float(row.get("Open")),
                 None if pd.isna(row.get("High")) else float(row.get("High")),
@@ -134,21 +153,71 @@ def fetch_and_store_stock_data(
             )
         )
 
-    before_count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-    conn.executemany(
-        f"""
-        INSERT INTO {table_name} (trade_date, open, high, low, close, adj_close, volume)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(trade_date) DO NOTHING
-        """,
-        insert_rows,
-    )
-    after_count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+    before_count = conn.execute("SELECT COUNT(*) FROM stock_data WHERE stock_id = ?", [stock_id]).fetchone()[0]
+    if overwrite_existing:
+        conn.executemany(
+            """
+            INSERT INTO stock_data (
+                stock_id,
+                stock_name,
+                exchange,
+                symbol,
+                trade_date,
+                open,
+                high,
+                low,
+                close,
+                adj_close,
+                volume
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(stock_id, trade_date) DO UPDATE SET
+                stock_name = EXCLUDED.stock_name,
+                exchange = EXCLUDED.exchange,
+                symbol = EXCLUDED.symbol,
+                open = EXCLUDED.open,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
+                close = EXCLUDED.close,
+                adj_close = EXCLUDED.adj_close,
+                volume = EXCLUDED.volume,
+                created_at = now()
+            """,
+            insert_rows,
+        )
+    else:
+        conn.executemany(
+            """
+            INSERT INTO stock_data (
+                stock_id,
+                stock_name,
+                exchange,
+                symbol,
+                trade_date,
+                open,
+                high,
+                low,
+                close,
+                adj_close,
+                volume
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(stock_id, trade_date) DO NOTHING
+            """,
+            insert_rows,
+        )
+    after_count = conn.execute("SELECT COUNT(*) FROM stock_data WHERE stock_id = ?", [stock_id]).fetchone()[0]
 
     inserted_rows = after_count - before_count
-    message = (
-        f"Downloaded {len(insert_rows)} rows, inserted {inserted_rows} new rows. "
-        f"Source={source_or_error}."
-    )
+    if overwrite_existing:
+        message = (
+            f"Downloaded {len(insert_rows)} rows and overwrote existing rows on date conflicts. "
+            f"Net new rows added: {inserted_rows}. Source={source_or_error}."
+        )
+    else:
+        message = (
+            f"Downloaded {len(insert_rows)} rows, inserted {inserted_rows} new rows. "
+            f"Source={source_or_error}."
+        )
     record_log(conn, stock_id, from_date, to_date, "SUCCESS", inserted_rows, message)
     return "SUCCESS", inserted_rows, message

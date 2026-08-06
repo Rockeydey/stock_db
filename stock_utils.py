@@ -7,12 +7,6 @@ def normalize_symbol(symbol: str) -> str:
     return re.sub(r"\.(NS|BO)$", "", symbol.strip().upper())
 
 
-def sanitize_table_name(exchange: str, symbol: str) -> str:
-    raw_name = f"{exchange}_{symbol}".lower()
-    cleaned = re.sub(r"[^a-z0-9_]", "_", raw_name)
-    return f"stock_{cleaned}"
-
-
 def exchange_symbol(exchange: str, symbol: str) -> str:
     exch = exchange.strip().upper()
     base_symbol = normalize_symbol(symbol)

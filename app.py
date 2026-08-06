@@ -47,18 +47,33 @@ def dashboard() -> str:
     stocks = get_stocks()
     from_date = request.args.get("from_date") or datetime.now().strftime("%Y-01-01")
     to_date = request.args.get("to_date") or datetime.now().strftime("%Y-%m-%d")
-    return render_template("dashboard.html", stocks=stocks, from_date=from_date, to_date=to_date)
+    overwrite_existing = request.args.get("overwrite_existing") == "1"
+    return render_template(
+        "dashboard.html",
+        stocks=stocks,
+        from_date=from_date,
+        to_date=to_date,
+        overwrite_existing=overwrite_existing,
+    )
 
 
 @app.route("/refresh-data", methods=["POST"])
 def refresh_data() -> Any:
     from_date = request.form.get("from_date", "").strip()
     to_date = request.form.get("to_date", "").strip()
+    overwrite_existing = request.form.get("overwrite_existing") == "1"
 
     ok, message = parse_date_range(from_date, to_date)
     if not ok:
         flash(message or "Invalid date range.", "error")
-        return redirect(url_for("dashboard", from_date=from_date, to_date=to_date))
+        return redirect(
+            url_for(
+                "dashboard",
+                from_date=from_date,
+                to_date=to_date,
+                overwrite_existing="1" if overwrite_existing else "0",
+            )
+        )
 
     today = datetime.now().date()
     if datetime.strptime(to_date, "%Y-%m-%d").date() > today:
@@ -68,7 +83,14 @@ def refresh_data() -> Any:
     stocks = get_stocks()
     if not stocks:
         flash("No stocks configured. Add stocks in Settings.", "warning")
-        return redirect(url_for("dashboard", from_date=from_date, to_date=to_date))
+        return redirect(
+            url_for(
+                "dashboard",
+                from_date=from_date,
+                to_date=to_date,
+                overwrite_existing="1" if overwrite_existing else "0",
+            )
+        )
 
     conn = get_conn()
     try:
@@ -79,9 +101,9 @@ def refresh_data() -> Any:
                     stock_id=stock["id"],
                     symbol=stock["symbol"],
                     exchange=stock["exchange"],
-                    table_name=stock["table_name"],
                     from_date=from_date,
                     to_date=to_date,
+                    overwrite_existing=overwrite_existing,
                 )
                 flash(
                     f"{stock['symbol']} ({stock['exchange']}): {status} - {msg}",
@@ -93,7 +115,14 @@ def refresh_data() -> Any:
     finally:
         conn.close()
 
-    return redirect(url_for("dashboard", from_date=from_date, to_date=to_date))
+    return redirect(
+        url_for(
+            "dashboard",
+            from_date=from_date,
+            to_date=to_date,
+            overwrite_existing="1" if overwrite_existing else "0",
+        )
+    )
 
 
 @app.route("/settings", methods=["GET", "POST"])

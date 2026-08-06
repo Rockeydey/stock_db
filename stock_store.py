@@ -5,34 +5,13 @@ from typing import Any
 import duckdb
 
 from db import get_conn
-from stock_utils import normalize_symbol, sanitize_table_name
-
-
-def create_stock_table(conn: duckdb.DuckDBPyConnection, table_name: str) -> None:
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            trade_date DATE PRIMARY KEY,
-            open DOUBLE,
-            high DOUBLE,
-            low DOUBLE,
-            close DOUBLE,
-            adj_close DOUBLE,
-            volume BIGINT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-
-def drop_stock_table(conn: duckdb.DuckDBPyConnection, table_name: str) -> None:
-    conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+from stock_utils import normalize_symbol
 
 
 def get_stocks() -> list[dict[str, Any]]:
     conn = get_conn()
     rows = conn.execute(
-        "SELECT id, symbol, exchange, table_name, created_at FROM stocks ORDER BY exchange, symbol"
+        "SELECT id, symbol, exchange, created_at FROM stocks ORDER BY exchange, symbol"
     ).fetchall()
     conn.close()
     return [
@@ -40,8 +19,7 @@ def get_stocks() -> list[dict[str, Any]]:
             "id": row[0],
             "symbol": row[1],
             "exchange": row[2],
-            "table_name": row[3],
-            "created_at": row[4],
+            "created_at": row[3],
         }
         for row in rows
     ]
@@ -56,20 +34,17 @@ def add_stock(symbol: str, exchange: str) -> tuple[bool, str]:
     if exchange not in {"NSE", "BSE"}:
         return False, "Exchange must be NSE or BSE."
 
-    table_name = sanitize_table_name(exchange, symbol)
     conn = get_conn()
     try:
-        create_stock_table(conn, table_name)
         conn.execute(
             """
-            INSERT INTO stocks (id, symbol, exchange, table_name)
-            VALUES (nextval('stocks_id_seq'), ?, ?, ?)
+            INSERT INTO stocks (id, symbol, exchange)
+            VALUES (nextval('stocks_id_seq'), ?, ?)
             """,
-            [symbol, exchange, table_name],
+            [symbol, exchange],
         )
-        return True, f"Added {symbol} ({exchange}) and created table {table_name}."
+        return True, f"Added {symbol} ({exchange})."
     except Exception as ex:
-        drop_stock_table(conn, table_name)
         return False, f"Could not add stock: {ex}"
     finally:
         conn.close()
@@ -78,17 +53,15 @@ def add_stock(symbol: str, exchange: str) -> tuple[bool, str]:
 def delete_stock(stock_id: int) -> tuple[bool, str]:
     conn = get_conn()
     try:
-        row = conn.execute(
-            "SELECT table_name, symbol, exchange FROM stocks WHERE id = ?", [stock_id]
-        ).fetchone()
+        row = conn.execute("SELECT symbol, exchange FROM stocks WHERE id = ?", [stock_id]).fetchone()
         if not row:
             return False, "Stock not found."
 
-        table_name, symbol, exchange = row
-        drop_stock_table(conn, table_name)
+        symbol, exchange = row
+        conn.execute("DELETE FROM stock_data WHERE stock_id = ?", [stock_id])
         conn.execute("DELETE FROM refresh_log WHERE stock_id = ?", [stock_id])
         conn.execute("DELETE FROM stocks WHERE id = ?", [stock_id])
-        return True, f"Deleted {symbol} ({exchange}) and dropped table {table_name}."
+        return True, f"Deleted {symbol} ({exchange}) and removed its rows from stock_data."
     except Exception as ex:
         return False, f"Could not delete stock: {ex}"
     finally:

@@ -4,6 +4,7 @@
 {% block content %}
 <h1>Stock Dashboard (NSE/BSE)</h1>
 <p class="muted">Refresh day-level stock data for configured symbols.</p>
+<p class="muted">All refreshed rows are stored in the shared <strong>stock_data</strong> table.</p>
 
 <form method="post" action="{{ url_for('refresh_data') }}">
   <div class="row">
@@ -19,6 +20,20 @@
       <button class="btn btn-primary" type="submit">Refresh Data</button>
     </div>
   </div>
+  <div class="row">
+    <div class="field">
+      <label for="overwrite_existing">
+        <input
+          id="overwrite_existing"
+          name="overwrite_existing"
+          type="checkbox"
+          value="1"
+          {% if overwrite_existing %}checked{% endif %}
+        />
+        Overwrite existing rows in stock_data for date conflicts
+      </label>
+    </div>
+  </div>
 </form>
 
 <h2>Configured Stocks</h2>
@@ -29,7 +44,6 @@
       <th>ID</th>
       <th>Symbol</th>
       <th>Exchange</th>
-      <th>Table Name</th>
       <th>Added At</th>
     </tr>
   </thead>
@@ -39,12 +53,12 @@
         <td>{{ stock.id }}</td>
         <td>{{ stock.symbol }}</td>
         <td>{{ stock.exchange }}</td>
-        <td><a href="{{ url_for('view_table', table_name=stock.table_name) }}">{{ stock.table_name }}</a></td>
         <td>{{ stock.created_at }}</td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
+<p><a href="{{ url_for('view_table', table_name='stock_data') }}">View stock_data table</a></p>
 {% else %}
 <p>No stocks configured. Go to Settings to add stocks.</p>
 {% endif %}

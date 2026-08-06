@@ -5,7 +5,7 @@ This project provides:
 - Flask web app framework
 - DuckDB as database
 - NSE/BSE day-level stock fetch process
-- Settings page to add/delete stocks (creates/drops tables)
+- Settings page to add/delete stocks
 - DuckDB table browser page
 - Refresh Data flow with log check to skip duplicate downloads for same date range
 
@@ -23,6 +23,7 @@ This project provides:
 
 - Dashboard: `/`
   - Select date range
+  - Optional: enable overwrite to update existing `stock_data` rows on key conflicts (`stock_id`, `trade_date`)
   - Click **Refresh Data**
 - Settings: `/settings`
   - Add/remove stocks
@@ -32,7 +33,7 @@ This project provides:
 ## Notes
 
 - Database file: `data/stocks.duckdb`
-- Stock table naming: `stock_<exchange>_<symbol>`
+- Shared stock data table: `stock_data` (keyed by `stock_id`, `trade_date`)
 - Data source: Yahoo Finance (`yfinance`) using ticker mapping:
   - NSE → `.NS`
   - BSE → `.BO`

@@ -3,7 +3,7 @@
 
 {% block content %}
 <h1>Settings</h1>
-<p class="muted">Add or remove stock symbols. This will create/drop stock tables in DuckDB.</p>
+<p class="muted">Add or remove stock symbols. Data for all symbols is stored in the shared stock_data table.</p>
 
 <h2>Add Stock</h2>
 <form method="post" action="{{ url_for('settings') }}">
@@ -34,7 +34,6 @@
       <th>ID</th>
       <th>Symbol</th>
       <th>Exchange</th>
-      <th>Table</th>
       <th>Action</th>
     </tr>
   </thead>
@@ -44,7 +43,6 @@
         <td>{{ stock.id }}</td>
         <td>{{ stock.symbol }}</td>
         <td>{{ stock.exchange }}</td>
-        <td>{{ stock.table_name }}</td>
         <td>
           <form method="post" action="{{ url_for('settings') }}" onsubmit="return confirm('Delete {{ stock.symbol }} ({{ stock.exchange }})?');">
             <input type="hidden" name="action" value="delete" />
