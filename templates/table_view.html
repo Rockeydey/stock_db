@@ -1,32 +1,102 @@
 {% extends 'base.html' %}
-{% block title %}Table View{% endblock %}
+{% block title %}SQL Query Runner{% endblock %}
 
 {% block content %}
-<h1>Table: {{ table_name }}</h1>
-<p><a href="{{ url_for('list_tables') }}">← Back to table list</a></p>
+<h1>SQL Query Runner</h1>
+<p class="muted">Allowed query types: SELECT, WITH, SHOW, DESCRIBE, PRAGMA, EXPLAIN, ALTER, DROP.</p>
 
-{% if headers and records %}
-<div style="overflow-x:auto;">
-  <table>
-    <thead>
-      <tr>
-        {% for h in headers %}
-          <th>{{ h }}</th>
-        {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in records %}
-        <tr>
-          {% for col in row %}
-            <td>{{ col }}</td>
-          {% endfor %}
-        </tr>
+<div class="sql-layout">
+  <aside class="table-sidebar">
+    <h3>Tables</h3>
+    {% if tables %}
+    <ul class="table-list">
+      {% for table in tables %}
+      <li>
+        <a
+          class="table-link{% if selected_table == table %} active{% endif %}"
+          href="{{ url_for('query_tables', query='SELECT * FROM ' ~ table ~ ' ORDER BY 1 DESC LIMIT 500', selected_table=table) }}"
+        >
+          {{ table }}
+        </a>
+      </li>
       {% endfor %}
-    </tbody>
-  </table>
+    </ul>
+    {% else %}
+    <p class="muted">No tables found.</p>
+    {% endif %}
+  </aside>
+
+  <section class="query-main">
+    <form method="post" class="query-form">
+      <div class="field">
+        <label for="query">Run query</label>
+        <textarea id="query" name="query" rows="6" placeholder="Write an allowed SQL query (SELECT/WITH/SHOW/DESCRIBE/PRAGMA/EXPLAIN/ALTER/DROP)...">{{ query_text }}</textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Run Query</button>
+    </form>
+
+    {% if headers %}
+    <div class="result-scroll-top" id="result-scroll-top">
+      <div class="result-scroll-top-inner" id="result-scroll-top-inner"></div>
+    </div>
+
+    <div class="result-scroll-bottom" id="result-scroll-bottom">
+      <table>
+        <thead>
+          <tr>
+            {% for h in headers %}
+              <th>{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in records %}
+            <tr>
+              {% for col in row %}
+                <td>{{ col }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+    (function () {
+      const top = document.getElementById("result-scroll-top");
+      const topInner = document.getElementById("result-scroll-top-inner");
+      const bottom = document.getElementById("result-scroll-bottom");
+      if (!top || !topInner || !bottom) return;
+
+      const syncWidth = () => {
+        topInner.style.width = bottom.scrollWidth + "px";
+      };
+
+      let syncing = false;
+      top.addEventListener("scroll", () => {
+        if (syncing) return;
+        syncing = true;
+        bottom.scrollLeft = top.scrollLeft;
+        syncing = false;
+      });
+
+      bottom.addEventListener("scroll", () => {
+        if (syncing) return;
+        syncing = true;
+        top.scrollLeft = bottom.scrollLeft;
+        syncing = false;
+      });
+
+      window.addEventListener("resize", syncWidth);
+      syncWidth();
+    })();
+    </script>
+    {% if not records %}
+    <p class="muted">Query ran successfully, but returned no rows.</p>
+    {% endif %}
+    {% else %}
+    <p>No results to display.</p>
+    {% endif %}
+  </section>
 </div>
-{% else %}
-<p>No rows in this table.</p>
-{% endif %}
 {% endblock %}

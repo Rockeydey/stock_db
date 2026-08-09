@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import duckdb
@@ -139,3 +140,42 @@ def fetch_table_rows(table_name: str, limit: int = 500) -> tuple[list[str], list
     df = conn.execute(f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT {limit}").df()
     conn.close()
     return list(df.columns), df.fillna("").values.tolist()
+
+
+def execute_read_query(query: str) -> tuple[list[str], list[list[Any]], str | None]:
+    stripped_query = (query or "").strip()
+    if not stripped_query:
+        return [], [], "Query cannot be empty."
+
+    normalized_query = stripped_query.rstrip(";").strip()
+    if re.match(
+        r"^alter\s+table\s+[A-Za-z_][A-Za-z0-9_]*\s+modify\s+column\s+[A-Za-z_][A-Za-z0-9_]*\b.*\bfirst$",
+        normalized_query,
+        re.IGNORECASE,
+    ):
+        return (
+            [],
+            [],
+            "DuckDB does not support ALTER TABLE ... MODIFY COLUMN ... FIRST. "
+            "Restart the app to run the built-in stock_data column-order migration, "
+            "or query with: SELECT stock_name, * EXCLUDE (stock_name) FROM stock_data.",
+        )
+
+    if not re.match(r"^(select|with|show|describe|pragma|explain|alter|drop)\b", normalized_query, re.IGNORECASE):
+        return [], [], "Only these query types are allowed: SELECT/WITH/SHOW/DESCRIBE/PRAGMA/EXPLAIN/ALTER/DROP."
+
+    if re.search(
+        r"\b(insert|update|delete|create|truncate|attach|detach|copy|call|merge|replace|grant|revoke|comment|vacuum|analyze)\b",
+        normalized_query,
+        re.IGNORECASE,
+    ):
+        return [], [], "Only these query types are allowed: SELECT/WITH/SHOW/DESCRIBE/PRAGMA/EXPLAIN/ALTER/DROP."
+
+    conn = get_conn()
+    try:
+        df = conn.execute(normalized_query).df()
+        return list(df.columns), df.fillna("").values.tolist(), None
+    except Exception as ex:
+        return [], [], f"Query failed: {ex}"
+    finally:
+        conn.close()

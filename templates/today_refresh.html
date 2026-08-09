@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Today's Data Refresh{% endblock %}
+
+{% block content %}
+<h1>Today's Data Refresh</h1>
+<p class="muted">Run and review per-symbol status for <strong>todays_data</strong> without using terminal output.</p>
+
+<form method="post" action="{{ url_for('today_refresh') }}">
+  <button class="btn btn-primary" type="submit">Run Today's Refresh</button>
+</form>
+
+{% if run_started_at %}
+  <p class="muted">Run started at: {{ run_started_at }}</p>
+{% endif %}
+
+{% if results %}
+  <h2>Per-Symbol Status</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Symbol</th>
+        <th>Exchange</th>
+        <th>Status</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+      <tr>
+        <td>{{ row.id }}</td>
+        <td>{{ row.symbol }}</td>
+        <td>{{ row.exchange }}</td>
+        <td>
+          <span class="status-pill {{ row.status|lower }}">{{ row.status }}</span>
+        </td>
+        <td>{{ row.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">todays_data total rows after run: {{ total_rows }}</p>
+{% elif stocks %}
+  <p class="muted">Click "Run Today's Refresh" to fetch and store current data for all configured stocks.</p>
+{% else %}
+  <p>No stocks configured. Go to <a href="{{ url_for('settings') }}">Settings</a> to add symbols.</p>
+{% endif %}
+{% endblock %}

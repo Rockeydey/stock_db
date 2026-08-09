@@ -4,20 +4,19 @@
 {% block content %}
 <h1>DuckDB Tables</h1>
 <p class="muted">Browse all tables available in the database.</p>
+<p><a class="btn btn-primary" href="{{ url_for('query_tables') }}">Open Global Query Runner</a></p>
 
 {% if tables %}
 <table>
   <thead>
     <tr>
       <th>Table Name</th>
-      <th>Open</th>
     </tr>
   </thead>
   <tbody>
     {% for table in tables %}
       <tr>
         <td>{{ table }}</td>
-        <td><a class="btn btn-secondary" href="{{ url_for('view_table', table_name=table) }}">View</a></td>
       </tr>
     {% endfor %}
   </tbody>

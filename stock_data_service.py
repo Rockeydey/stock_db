@@ -1,6 +1,16 @@
+"""
+Purpose: 
+This module provides functions to fetch stock data from Yahoo Finance,
+normalize it, and store it in the DuckDB database. It includes handling for
+date ranges, retries, and logging of fetch attempts.
+
+"""
+
+
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import duckdb
@@ -221,3 +231,137 @@ def fetch_and_store_stock_data(
         )
     record_log(conn, stock_id, from_date, to_date, "SUCCESS", inserted_rows, message)
     return "SUCCESS", inserted_rows, message
+
+
+def fetch_and_store_todays_data(
+    conn: duckdb.DuckDBPyConnection,
+    stock_id: int,
+    symbol: str,
+    exchange: str,
+) -> tuple[str, str]:
+    ticker = exchange_symbol(exchange, symbol)
+    ticker_obj = yf.Ticker(ticker)
+
+    info: dict[str, Any] = {}
+    try:
+        raw_info = ticker_obj.info
+        if isinstance(raw_info, dict):
+            info = raw_info
+    except Exception:
+        info = {}
+
+    company_name = info.get("longName")
+    stock_name = company_name or info.get("shortName") or symbol
+
+    current_price_raw = info.get("currentPrice", info.get("regularMarketPrice"))
+    pe_ratio_trailing_raw = info.get("trailingPE")
+    pe_ratio_forward_raw = info.get("forwardPE")
+    beta_5y_monthly_raw = info.get("beta")
+    market_cap_raw = info.get("marketCap")
+    fifty_two_week_high_raw = info.get("fiftyTwoWeekHigh")
+    fifty_two_week_low_raw = info.get("fiftyTwoWeekLow")
+    sector_raw = info.get("sector")
+    industry_raw = info.get("industry")
+
+    try:
+        quote_df = ticker_obj.history(
+            period="5d",
+            interval="1d",
+            auto_adjust=False,
+            actions=False,
+        )
+        quote_df = _normalize_download_frame(quote_df)
+    except Exception as ex:
+        return "WARNING", f"Failed to fetch current data for {ticker}: {ex}"
+
+    if quote_df.empty:
+        return "WARNING", f"No current data returned for {ticker}."
+
+    quote_df = quote_df.reset_index()
+    if "Date" not in quote_df.columns and "Datetime" in quote_df.columns:
+        quote_df = quote_df.rename(columns={"Datetime": "Date"})
+
+    if "Date" not in quote_df.columns:
+        return "WARNING", f"Unexpected response format for {ticker}. Missing Date column."
+
+    latest = quote_df.iloc[-1]
+    quote_date_raw = latest.get("Date")
+    quote_date = pd.to_datetime(quote_date_raw).date() if pd.notna(quote_date_raw) else date.today()
+
+    adj_close_val = latest.get("Adj Close")
+    if pd.isna(adj_close_val):
+        adj_close_val = latest.get("Close")
+
+    conn.execute(
+        """
+        INSERT INTO todays_data (
+            stock_id,
+            stock_name,
+            exchange,
+            symbol,
+            quote_date,
+            open,
+            high,
+            low,
+            close,
+            adj_close,
+            volume,
+            current_price,
+            pe_ratio_trailing,
+            pe_ratio_forward,
+            beta_5y_monthly,
+            market_cap,
+            fifty_two_week_high,
+            fifty_two_week_low,
+            company_name,
+            sector,
+            industry
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(stock_id, quote_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            exchange = EXCLUDED.exchange,
+            symbol = EXCLUDED.symbol,
+            open = EXCLUDED.open,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            close = EXCLUDED.close,
+            adj_close = EXCLUDED.adj_close,
+            volume = EXCLUDED.volume,
+            current_price = EXCLUDED.current_price,
+            pe_ratio_trailing = EXCLUDED.pe_ratio_trailing,
+            pe_ratio_forward = EXCLUDED.pe_ratio_forward,
+            beta_5y_monthly = EXCLUDED.beta_5y_monthly,
+            market_cap = EXCLUDED.market_cap,
+            fifty_two_week_high = EXCLUDED.fifty_two_week_high,
+            fifty_two_week_low = EXCLUDED.fifty_two_week_low,
+            company_name = EXCLUDED.company_name,
+            sector = EXCLUDED.sector,
+            industry = EXCLUDED.industry,
+            fetched_at = now()
+        """,
+        [
+            stock_id,
+            stock_name,
+            exchange,
+            symbol,
+            quote_date,
+            None if pd.isna(latest.get("Open")) else float(latest.get("Open")),
+            None if pd.isna(latest.get("High")) else float(latest.get("High")),
+            None if pd.isna(latest.get("Low")) else float(latest.get("Low")),
+            None if pd.isna(latest.get("Close")) else float(latest.get("Close")),
+            None if pd.isna(adj_close_val) else float(adj_close_val),
+            None if pd.isna(latest.get("Volume")) else int(latest.get("Volume")),
+            None if pd.isna(current_price_raw) else float(current_price_raw),
+            None if pd.isna(pe_ratio_trailing_raw) else float(pe_ratio_trailing_raw),
+            None if pd.isna(pe_ratio_forward_raw) else float(pe_ratio_forward_raw),
+            None if pd.isna(beta_5y_monthly_raw) else float(beta_5y_monthly_raw),
+            None if pd.isna(market_cap_raw) else int(market_cap_raw),
+            None if pd.isna(fifty_two_week_high_raw) else float(fifty_two_week_high_raw),
+            None if pd.isna(fifty_two_week_low_raw) else float(fifty_two_week_low_raw),
+            None if pd.isna(company_name) else str(company_name),
+            None if pd.isna(sector_raw) else str(sector_raw),
+            None if pd.isna(industry_raw) else str(industry_raw),
+        ],
+    )
+    return "SUCCESS", f"Saved current quote for {ticker} on {quote_date}."

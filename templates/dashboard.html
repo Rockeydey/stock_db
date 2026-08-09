@@ -5,6 +5,7 @@
 <h1>Stock Dashboard (NSE/BSE)</h1>
 <p class="muted">Refresh day-level stock data for configured symbols.</p>
 <p class="muted">All refreshed rows are stored in the shared <strong>stock_data</strong> table.</p>
+<p><a class="btn btn-secondary" href="{{ url_for('today_refresh') }}">Open Today's Refresh Status</a></p>
 
 <form method="post" action="{{ url_for('refresh_data') }}">
   <div class="row">

@@ -7,10 +7,11 @@ from flask import Flask, flash, redirect, render_template, request, url_for
 
 from core_config import SECRET_KEY
 from db import get_conn, init_db
-from stock_data_service import fetch_and_store_stock_data
+from stock_data_service import fetch_and_store_stock_data, fetch_and_store_todays_data
 from stock_store import (
     add_stock,
     delete_stock,
+    execute_read_query,
     fetch_table_rows,
     get_stocks,
     list_main_tables,
@@ -150,13 +151,103 @@ def settings() -> str:
     return render_template("settings.html", stocks=get_stocks())
 
 
+@app.route("/today-refresh", methods=["GET", "POST"])
+def today_refresh() -> str:
+    stocks = get_stocks()
+    results: list[dict[str, Any]] = []
+    run_started_at: str | None = None
+    total_rows = 0
+
+    if request.method == "POST":
+        if not stocks:
+            flash("No stocks configured. Add stocks in Settings.", "warning")
+        else:
+            run_started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn = get_conn()
+            try:
+                for stock in stocks:
+                    status = "ERROR"
+                    message = "Unknown error"
+                    try:
+                        status, message = fetch_and_store_todays_data(
+                            conn,
+                            stock_id=stock["id"],
+                            symbol=stock["symbol"],
+                            exchange=stock["exchange"],
+                        )
+                    except Exception as ex:
+                        status = "ERROR"
+                        message = str(ex)
+
+                    results.append(
+                        {
+                            "id": stock["id"],
+                            "symbol": stock["symbol"],
+                            "exchange": stock["exchange"],
+                            "status": status,
+                            "message": message,
+                        }
+                    )
+
+                total_rows = conn.execute("SELECT COUNT(*) FROM todays_data").fetchone()[0]
+                success_count = sum(1 for row in results if row["status"] == "SUCCESS")
+                warning_count = sum(1 for row in results if row["status"] == "WARNING")
+                error_count = sum(1 for row in results if row["status"] == "ERROR")
+                flash(
+                    (
+                        f"Today's refresh completed. Success: {success_count}, "
+                        f"Warning: {warning_count}, Error: {error_count}."
+                    ),
+                    "success" if error_count == 0 else "warning",
+                )
+            finally:
+                conn.close()
+
+    return render_template(
+        "today_refresh.html",
+        stocks=stocks,
+        results=results,
+        run_started_at=run_started_at,
+        total_rows=total_rows,
+    )
+
+
 @app.route("/tables")
-def list_tables() -> str:
-    return render_template("tables.html", tables=list_main_tables())
+def list_tables() -> Any:
+    return redirect(url_for("query_tables"))
+
+
+@app.route("/tables/query", methods=["GET", "POST"])
+def query_tables() -> str:
+    default_query = "SELECT * FROM stocks ORDER BY id DESC LIMIT 100"
+    query_text = (request.args.get("query") or "").strip() or default_query
+    selected_table = (request.args.get("selected_table") or "").strip()
+    tables = list_main_tables()
+    if selected_table and selected_table not in tables:
+        selected_table = ""
+    headers: list[str] = []
+    records: list[list[Any]] = []
+
+    if request.method == "POST":
+        query_text = request.form.get("query", "").strip() or default_query
+
+    headers, records, query_error = execute_read_query(query_text)
+    if query_error:
+        flash(query_error, "error")
+
+    return render_template(
+        "table_view.html",
+        table_name=None,
+        headers=headers,
+        records=records,
+        query_text=query_text,
+        tables=tables,
+        selected_table=selected_table,
+    )
 
 
 @app.route("/tables/<table_name>")
-def view_table(table_name: str) -> str:
+def view_table(table_name: str) -> Any:
     if not is_safe_identifier(table_name):
         flash("Invalid table name.", "error")
         return redirect(url_for("list_tables"))
@@ -166,7 +257,8 @@ def view_table(table_name: str) -> str:
         flash("Table not found.", "error")
         return redirect(url_for("list_tables"))
 
-    return render_template("table_view.html", table_name=table_name, headers=headers, records=records)
+    default_query = f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 500"
+    return redirect(url_for("query_tables", query=default_query, selected_table=table_name))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,12 @@
+"""
+Purpose: This module provides functions to initialize and 
+manage the DuckDB database for storing stock data. 
+It includes functionality to create necessary tables, 
+migrate legacy data, and ensure proper column order in the stock_data table.
+
+"""
+
+
 from __future__ import annotations
 
 import re
@@ -14,6 +23,70 @@ def get_conn() -> duckdb.DuckDBPyConnection:
 
 def _is_safe_identifier(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name or ""))
+
+
+def _ensure_stock_data_column_order(conn: duckdb.DuckDBPyConnection) -> None:
+    column_rows = conn.execute("PRAGMA table_info('stock_data')").fetchall()
+    column_names = [row[1] for row in column_rows]
+    if not column_names or "stock_name" not in column_names:
+        return
+    if column_names[0] == "stock_name":
+        return
+
+    conn.execute("DROP TABLE IF EXISTS stock_data_reordered")
+    conn.execute(
+        """
+        CREATE TABLE stock_data_reordered (
+            stock_name VARCHAR,
+            stock_id INTEGER NOT NULL,
+            exchange VARCHAR,
+            symbol VARCHAR,
+            trade_date DATE NOT NULL,
+            open DOUBLE,
+            high DOUBLE,
+            low DOUBLE,
+            close DOUBLE,
+            adj_close DOUBLE,
+            volume BIGINT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (stock_id, trade_date)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO stock_data_reordered (
+            stock_name,
+            stock_id,
+            exchange,
+            symbol,
+            trade_date,
+            open,
+            high,
+            low,
+            close,
+            adj_close,
+            volume,
+            created_at
+        )
+        SELECT
+            stock_name,
+            stock_id,
+            exchange,
+            symbol,
+            trade_date,
+            open,
+            high,
+            low,
+            close,
+            adj_close,
+            volume,
+            created_at
+        FROM stock_data
+        """
+    )
+    conn.execute("DROP TABLE stock_data")
+    conn.execute("ALTER TABLE stock_data_reordered RENAME TO stock_data")
 
 
 def init_db() -> None:
@@ -89,10 +162,51 @@ def init_db() -> None:
         """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS todays_data (
+            stock_id INTEGER NOT NULL,
+            stock_name VARCHAR,
+            exchange VARCHAR,
+            symbol VARCHAR,
+            quote_date DATE NOT NULL,
+            open DOUBLE,
+            high DOUBLE,
+            low DOUBLE,
+            close DOUBLE,
+            adj_close DOUBLE,
+            volume BIGINT,
+            current_price DOUBLE,
+            pe_ratio_trailing DOUBLE,
+            pe_ratio_forward DOUBLE,
+            beta_5y_monthly DOUBLE,
+            market_cap BIGINT,
+            fifty_two_week_high DOUBLE,
+            fifty_two_week_low DOUBLE,
+            company_name VARCHAR,
+            sector VARCHAR,
+            industry VARCHAR,
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (stock_id, quote_date)
+        )
+        """
+    )
+
     # Backfill schema changes for existing databases.
     conn.execute("ALTER TABLE stock_data ADD COLUMN IF NOT EXISTS stock_name VARCHAR")
     conn.execute("ALTER TABLE stock_data ADD COLUMN IF NOT EXISTS exchange VARCHAR")
     conn.execute("ALTER TABLE stock_data ADD COLUMN IF NOT EXISTS symbol VARCHAR")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS current_price DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS pe_ratio_trailing DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS pe_ratio_forward DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS beta_5y_monthly DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS market_cap BIGINT")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS fifty_two_week_high DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS fifty_two_week_low DOUBLE")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS company_name VARCHAR")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS sector VARCHAR")
+    conn.execute("ALTER TABLE todays_data ADD COLUMN IF NOT EXISTS industry VARCHAR")
+    _ensure_stock_data_column_order(conn)
 
     # Migrate legacy rows from old per-stock tables if present, then remove those tables.
     for stock_id, table_name in legacy_stock_tables:
