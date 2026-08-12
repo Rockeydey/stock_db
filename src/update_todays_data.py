@@ -8,8 +8,8 @@ Updated: 2026-08-09
 
 from __future__ import annotations
 
-from db import get_conn, init_db
-from stock_data_service import fetch_and_store_todays_data
+from src.db import get_conn, init_db
+from src.stock_data_service import fetch_and_store_todays_data
 def main() -> None:
     init_db()
     conn = get_conn()

@@ -5,8 +5,8 @@ from typing import Any
 
 import duckdb
 
-from db import get_conn
-from stock_utils import normalize_symbol
+from src.db import get_conn
+from src.stock_utils import normalize_symbol
 
 
 def get_stocks() -> list[dict[str, Any]]:

@@ -17,8 +17,8 @@ import duckdb
 import pandas as pd
 import yfinance as yf
 
-from stock_store import log_exists, record_log
-from stock_utils import exchange_symbol
+from src.stock_store import log_exists, record_log
+from src.stock_utils import exchange_symbol
 
 
 def _normalize_download_frame(df: pd.DataFrame) -> pd.DataFrame:

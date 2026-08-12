@@ -14,7 +14,7 @@ import time
 
 import duckdb
 
-from core_config import DATA_DIR, DB_PATH
+from src.core_config import DATA_DIR, DB_PATH
 
 
 def get_conn(

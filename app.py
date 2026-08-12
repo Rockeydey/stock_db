@@ -5,10 +5,10 @@ from typing import Any
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from core_config import SECRET_KEY
-from db import get_conn, init_db
-from stock_data_service import fetch_and_store_stock_data, fetch_and_store_todays_data
-from stock_store import (
+from src.core_config import SECRET_KEY
+from src.db import get_conn, init_db
+from src.stock_data_service import fetch_and_store_stock_data, fetch_and_store_todays_data
+from src.stock_store import (
     add_stock,
     delete_stock,
     execute_read_query,
@@ -17,7 +17,7 @@ from stock_store import (
     list_main_tables,
     record_log,
 )
-from stock_utils import is_safe_identifier
+from src.stock_utils import is_safe_identifier
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
