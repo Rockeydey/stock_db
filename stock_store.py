@@ -10,7 +10,7 @@ from stock_utils import normalize_symbol
 
 
 def get_stocks() -> list[dict[str, Any]]:
-    conn = get_conn()
+    conn = get_conn(read_only=True)
     rows = conn.execute(
         "SELECT id, symbol, exchange, created_at FROM stocks ORDER BY exchange, symbol"
     ).fetchall()
@@ -109,7 +109,7 @@ def record_log(
 
 
 def list_main_tables() -> list[str]:
-    conn = get_conn()
+    conn = get_conn(read_only=True)
     rows = conn.execute(
         """
         SELECT table_name
@@ -123,7 +123,7 @@ def list_main_tables() -> list[str]:
 
 
 def fetch_table_rows(table_name: str, limit: int = 500) -> tuple[list[str], list[list[Any]]]:
-    conn = get_conn()
+    conn = get_conn(read_only=True)
     exists = conn.execute(
         """
         SELECT 1

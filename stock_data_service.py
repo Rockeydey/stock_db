@@ -292,6 +292,9 @@ def fetch_and_store_todays_data(
     if pd.isna(adj_close_val):
         adj_close_val = latest.get("Close")
 
+    # Keep only the latest snapshot row per stock.
+    conn.execute("DELETE FROM todays_data WHERE stock_id = ?", [stock_id])
+
     conn.execute(
         """
         INSERT INTO todays_data (
@@ -318,7 +321,7 @@ def fetch_and_store_todays_data(
             industry
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(stock_id, quote_date) DO UPDATE SET
+        ON CONFLICT(stock_id) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
             exchange = EXCLUDED.exchange,
             symbol = EXCLUDED.symbol,

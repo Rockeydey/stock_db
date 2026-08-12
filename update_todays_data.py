@@ -1,16 +1,32 @@
+"""
+This script updates today's stock data for all configured stocks in the database. It initializes the database connection, retrieves the list of stocks, and fetches and stores today's data for each stock. Finally, it prints the total number of rows in the `todays_data` table after the update.
+
+Updated: 2026-08-09
+
+"""
+
+
 from __future__ import annotations
 
 from db import get_conn, init_db
 from stock_data_service import fetch_and_store_todays_data
-from stock_store import get_stocks
-
-
 def main() -> None:
     init_db()
     conn = get_conn()
 
     try:
-        stocks = get_stocks()
+        rows = conn.execute(
+            "SELECT id, symbol, exchange, created_at FROM stocks ORDER BY exchange, symbol"
+        ).fetchall()
+        stocks = [
+            {
+                "id": row[0],
+                "symbol": row[1],
+                "exchange": row[2],
+                "created_at": row[3],
+            }
+            for row in rows
+        ]
         print(f"Stocks configured: {len(stocks)}")
 
         for stock in stocks:
