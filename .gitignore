@@ -29,7 +29,7 @@ Thumbs.db
 *.log
 
 # Local database and temporary data artifacts
-data/stocks.duckdb
+
 *.db-journal
 *.sqlite
 *.sqlite3
