@@ -25,22 +25,33 @@ def get_conn(
 ) -> duckdb.DuckDBPyConnection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     last_error: Exception | None = None
+    # DuckDB cannot keep simultaneous connections to the same file with
+    # different connection configurations in one process.
+    # Always opening in read-write mode avoids mixed read_only/read_write errors.
+    effective_read_only = False
     for attempt in range(retries + 1):
         try:
-            return duckdb.connect(str(DB_PATH), read_only=read_only)
-        except duckdb.IOException as ex:
+            return duckdb.connect(str(DB_PATH), read_only=effective_read_only)
+        except (duckdb.IOException, duckdb.ConnectionException) as ex:
             last_error = ex
             error_text = str(ex).lower()
-            if "file is already open" not in error_text:
+            if (
+                "file is already open" not in error_text
+                and "different configuration" not in error_text
+            ):
                 raise
             if attempt >= retries:
                 break
             time.sleep(retry_delay_seconds)
 
+    mode_note = "read-write"
+    if read_only:
+        mode_note = "read-write (read_only request ignored for compatibility)"
+
     raise duckdb.IOException(
-        "DuckDB file is locked by another Python process. "
-        "Close the other process (or wait for it to finish) and retry. "
-        f"Path: {DB_PATH}. Last error: {last_error}"
+        "DuckDB connection failed due to an existing incompatible or locked "
+        "connection. Close other processes using this database (or restart the app) "
+        f"and retry. Path: {DB_PATH}. Mode used: {mode_note}. Last error: {last_error}"
     )
 
 
