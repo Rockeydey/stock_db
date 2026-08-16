@@ -171,6 +171,12 @@ def execute_read_query(query: str) -> tuple[list[str], list[list[Any]], str | No
     ):
         return [], [], "Only these query types are allowed: SELECT/WITH/SHOW/DESCRIBE/PRAGMA/EXPLAIN/ALTER/DROP."
 
+    # Keep stock_data wildcard queries deterministic when ORDER BY is omitted.
+    if re.match(r"^select\s+\*\s+from\s+stock_data\b", normalized_query, re.IGNORECASE) and not re.search(
+        r"\border\s+by\b", normalized_query, re.IGNORECASE
+    ):
+        normalized_query = f"{normalized_query} ORDER BY trade_date DESC, stock_id"
+
     conn = get_conn()
     try:
         df = conn.execute(normalized_query).df()

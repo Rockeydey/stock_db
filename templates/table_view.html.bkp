@@ -14,7 +14,7 @@
       <li>
         <a
           class="table-link{% if selected_table == table %} active{% endif %}"
-          href="{{ url_for('view_table', table_name=table) }}"
+          href="{{ url_for('query_tables', query='SELECT * FROM ' ~ table ~ ' ORDER BY 1 DESC LIMIT 500', selected_table=table) }}"
         >
           {{ table }}
         </a>

@@ -257,7 +257,12 @@ def view_table(table_name: str) -> Any:
         flash("Table not found.", "error")
         return redirect(url_for("list_tables"))
 
-    default_query = f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 500"
+    if table_name == "stock_data":
+        default_query = "SELECT * FROM stock_data ORDER BY trade_date DESC, stock_id LIMIT 500"
+    elif table_name == "todays_data":
+        default_query = "SELECT * FROM todays_data ORDER BY quote_date DESC, stock_id LIMIT 500"
+    else:
+        default_query = f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 500"
     return redirect(url_for("query_tables", query=default_query, selected_table=table_name))
 
 
