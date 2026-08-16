@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import csv
+from io import StringIO
 from datetime import datetime
 from typing import Any
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, Response, flash, redirect, render_template, request, url_for
 
 from src.core_config import SECRET_KEY
 from src.db import get_conn, init_db
@@ -218,7 +220,7 @@ def list_tables() -> Any:
 
 
 @app.route("/tables/query", methods=["GET", "POST"])
-def query_tables() -> str:
+def query_tables() -> Any:
     default_query = "SELECT * FROM stocks ORDER BY id DESC LIMIT 100"
     query_text = (request.args.get("query") or "").strip() or default_query
     selected_table = (request.args.get("selected_table") or "").strip()
@@ -230,10 +232,26 @@ def query_tables() -> str:
 
     if request.method == "POST":
         query_text = request.form.get("query", "").strip() or default_query
+        action = request.form.get("action", "run")
+    else:
+        action = "run"
 
     headers, records, query_error = execute_read_query(query_text)
     if query_error:
         flash(query_error, "error")
+    elif request.method == "POST" and action == "download_csv":
+        csv_buffer = StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(headers)
+        writer.writerows(records)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"query_results_{timestamp}.csv"
+        return Response(
+            csv_buffer.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     return render_template(
         "table_view.html",
@@ -243,6 +261,30 @@ def query_tables() -> str:
         query_text=query_text,
         tables=tables,
         selected_table=selected_table,
+    )
+
+
+@app.route("/tables/query/download", methods=["POST"])
+def download_query_csv() -> Any:
+    default_query = "SELECT * FROM stocks ORDER BY id DESC LIMIT 100"
+    query_text = request.form.get("query", "").strip() or default_query
+
+    headers, records, query_error = execute_read_query(query_text)
+    if query_error:
+        flash(query_error, "error")
+        return redirect(url_for("query_tables", query=query_text))
+
+    csv_buffer = StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(headers)
+    writer.writerows(records)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"query_results_{timestamp}.csv"
+    return Response(
+        csv_buffer.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
