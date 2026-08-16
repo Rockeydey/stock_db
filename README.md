@@ -32,7 +32,7 @@ This project provides:
 
 ## Notes
 
-- Database file: `data/stocks.duckdb`
+- Database file: `src/data/stocks.duckdb`
 - Shared stock data table: `stock_data` (keyed by `stock_id`, `trade_date`)
 - Data source: Yahoo Finance (`yfinance`) using ticker mapping:
   - NSE → `.NS`
